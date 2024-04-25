@@ -23,5 +23,8 @@
     "volta": {
         "node": "20.12.2",
         "pnpm": "8.15.7"
+    },
+    "dependencies": {
+        "openai": "^4.38.5"
     }
 }
