@@ -10,7 +10,7 @@ import {
   MarkdownView,
 } from "obsidian";
 import OpenAI, { toFile } from "openai";
-import mime from 'mime';
+import mime from "mime";
 // import axios from 'axios';
 
 import { NativeAudioRecorder } from "./recorder";
@@ -61,9 +61,7 @@ export default class OpenAIPlugin extends Plugin {
 
         // store the blob in the vault
         const audioBlob = await this.recorder.stopRecording();
-        const extension = this.recorder
-          .getMimeType()
-          ?.split("/")[1];
+        const extension = this.recorder.getMimeType()?.split("/")[1];
         const fileName = `${new Date()
           .toISOString()
           .replace(/[:.]/g, "-")}.${extension}`;
@@ -71,20 +69,39 @@ export default class OpenAIPlugin extends Plugin {
         const arrayBuffer = await audioBlob.arrayBuffer();
         await this.app.vault.adapter.writeBinary(
           `${this.settings.audioPath}/${fileName}`,
-          new Uint8Array(arrayBuffer)
+          new Uint8Array(arrayBuffer),
         );
 
-        const editor = this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+        const editor =
+          this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
 
         if (editor) {
           const cursorPosition = editor.getCursor();
-          editor.replaceRange(`![](${this.settings.audioPath}/${fileName})`, cursorPosition);
+          // TODO: support wiki links (personal preference for now)
+          editor.replaceRange(
+            `![](${this.settings.audioPath}/${fileName})`,
+            cursorPosition,
+          );
+        } else {
+          new Notice("No active editor found, saving to a file");
+          const noteFilename = fileName.replace(extension ?? "webm", "md");
+          await this.app.vault.create(
+            `${this.settings.audioPath}/${noteFilename}`,
+            // TODO: support wiki links (personal preference for now)
+            `![](${this.settings.audioPath}/${fileName})`,
+          );
+
+          await this.app.workspace.openLinkText(
+            `![](${this.settings.audioPath}/${noteFilename})`,
+            "",
+            true,
+          );
         }
 
         new Notice("Recording saved!");
         this.recording = false;
       },
-    )
+    );
 
     // This creates an icon in the left ribbon.
     const ribbonIconEl = this.addRibbonIcon(
@@ -95,24 +112,28 @@ export default class OpenAIPlugin extends Plugin {
         if (activeFile) {
           // Get all linked files in the markdown file
           const filesLinked = Object.keys(
-            this.app.metadataCache.resolvedLinks[activeFile.path]
+            this.app.metadataCache.resolvedLinks[activeFile.path],
           );
 
           for (const linkedFilePath of filesLinked) {
             // Get the binary content of the files
-            const linkedFile = this.app.vault.getAbstractFileByPath(linkedFilePath);
+            const linkedFile =
+              this.app.vault.getAbstractFileByPath(linkedFilePath);
             if (linkedFile instanceof TFile) {
               console.log(linkedFile);
               const fileContent = await this.app.vault.readBinary(linkedFile);
               console.log(fileContent);
 
-              const transcription = await this.openai.audio.transcriptions.create({
-                model: 'whisper-1',
-                response_format: 'verbose_json',
-                file: await toFile(fileContent, linkedFile.name, {
-                  type: mime.getType(linkedFile.name) || "application/octet-stream",
-                }),
-              });
+              const transcription =
+                await this.openai.audio.transcriptions.create({
+                  model: "whisper-1",
+                  response_format: "verbose_json",
+                  file: await toFile(fileContent, linkedFile.name, {
+                    type:
+                      mime.getType(linkedFile.name) ||
+                      "application/octet-stream",
+                  }),
+                });
 
               // const formData = new FormData();
               // formData.append('file', new Blob([fileContent], {
@@ -145,7 +166,10 @@ export default class OpenAIPlugin extends Plugin {
 
                 if (result) {
                   // replace the linked file with the transcription
-                  const replaced = data.replace(regex, `${result?.[0]}\n\n${transcription.text}`);
+                  const replaced = data.replace(
+                    regex,
+                    `${result?.[0]}\n\n${transcription.text}`,
+                  );
                   return replaced;
                 }
 
@@ -153,7 +177,6 @@ export default class OpenAIPlugin extends Plugin {
               });
             }
           }
-
         }
 
         // Called when the user clicks the icon.
