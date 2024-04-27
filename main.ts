@@ -10,15 +10,20 @@ import {
 } from "obsidian";
 import OpenAI, { toFile } from "openai";
 import mime from 'mime';
+// import axios from 'axios';
+
+import { NativeAudioRecorder } from "./recorder";
 
 // Remember to rename these classes and interfaces!
 
 interface OpenAIPluginSettings {
   apiKey: string;
+  audioPath: string;
 }
 
 const DEFAULT_SETTINGS: OpenAIPluginSettings = {
   apiKey: "sk-xxx",
+  audioPath: "audio-notes",
 };
 
 addIcon(
@@ -29,6 +34,8 @@ addIcon(
 export default class OpenAIPlugin extends Plugin {
   settings: OpenAIPluginSettings;
   openai: OpenAI;
+  recorder: NativeAudioRecorder;
+  recording = false;
 
   async onload() {
     await this.loadSettings();
@@ -37,6 +44,38 @@ export default class OpenAIPlugin extends Plugin {
       apiKey: this.settings.apiKey,
       dangerouslyAllowBrowser: true,
     });
+
+    this.recorder = new NativeAudioRecorder();
+
+    this.addRibbonIcon(
+      "microphone",
+      "Start / Stop Recording",
+      async (evt: MouseEvent) => {
+        if (!this.recording) {
+          await this.recorder.startRecording();
+          this.recording = true;
+          new Notice("Recording started!");
+          return;
+        }
+
+        // store the blob in the vault
+        const audioBlob = await this.recorder.stopRecording();
+        const extension = this.recorder
+          .getMimeType()
+          ?.split("/")[1];
+        const fileName = `${new Date()
+          .toISOString()
+          .replace(/[:.]/g, "-")}.${extension}`;
+
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        await this.app.vault.adapter.writeBinary(
+          `${this.settings.audioPath}/${fileName}`,
+          new Uint8Array(arrayBuffer)
+        );
+        new Notice("Recording saved!");
+        this.recording = false;
+      },
+    )
 
     // This creates an icon in the left ribbon.
     const ribbonIconEl = this.addRibbonIcon(
@@ -56,24 +95,44 @@ export default class OpenAIPlugin extends Plugin {
             if (linkedFile instanceof TFile) {
               console.log(linkedFile);
               const fileContent = await this.app.vault.readBinary(linkedFile);
-              // Whisper it
+              console.log(fileContent);
+
               const transcription = await this.openai.audio.transcriptions.create({
+                model: 'whisper-1',
+                response_format: 'verbose_json',
                 file: await toFile(fileContent, linkedFile.name, {
                   type: mime.getType(linkedFile.name) || "application/octet-stream",
                 }),
-                model: "whisper-1",
-                response_format: "verbose_json",
               });
 
-              console.log(transcription);
+              // const formData = new FormData();
+              // formData.append('file', new Blob([fileContent], {
+              //   type: mime.getType(linkedFile.name) || "application/octet-stream",
+              // }), linkedFile.name);
+              // formData.append('model', 'whisper-1');
+              // formData.append('response_format', 'verbose_json');
+
+              // // axios to POST the form to https://api.openai.com/v1/audio/transcriptions
+
+              // const response = await axios.post('https://api.openai.com/v1/audio/transcriptions', formData, {
+              //   headers: {
+              //     'Content-Type': 'multipart/form-data',
+              //     Authorization: `Bearer ${this.settings.apiKey}`,
+              //   },
+              // });
+
+              // const transcription = response.data;
 
               await this.app.vault.process(activeFile, (data) => {
                 // look for the linked file in the markdown file
-                const encodedFilename = encodeURIComponent(linkedFile.name);
-                const regexString = `\\[\\[(${encodedFilename})\\]\\]|!\\[\\]\\((${encodedFilename})\\)`;
+                const encodedFilePath = encodeURI(linkedFile.path);
+                const encodedFilename = encodeURI(linkedFile.name);
+                const regexString = `\\[\\[(${encodedFilename})\\]\\]|!\\[\\]\\((${encodedFilename})\\)|\\[\\[(${encodedFilePath})\\]\\]|!\\[\\]\\((${encodedFilePath})\\)`;
                 const regex = new RegExp(regexString, "g");
 
                 const result = regex.exec(data);
+
+                console.log(result);
 
                 if (result) {
                   // replace the linked file with the transcription
@@ -203,10 +262,10 @@ class OpenAISettingsTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.apiKey = value;
             await this.plugin.saveSettings();
-            this.plugin.openai = new OpenAI({
-              apiKey: this.plugin.settings.apiKey,
-              dangerouslyAllowBrowser: true,
-            });
+            // this.plugin.openai = new OpenAI({
+            //   apiKey: this.plugin.settings.apiKey,
+            //   dangerouslyAllowBrowser: true,
+            // });
           }),
       );
   }

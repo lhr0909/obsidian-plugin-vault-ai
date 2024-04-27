@@ -25,6 +25,7 @@
         "pnpm": "8.15.7"
     },
     "dependencies": {
+        "axios": "^1.6.8",
         "mime": "^4.0.3",
         "openai": "^4.38.5"
     }
