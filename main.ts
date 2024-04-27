@@ -7,6 +7,7 @@ import {
   Setting,
   TFile,
   addIcon,
+  MarkdownView,
 } from "obsidian";
 import OpenAI, { toFile } from "openai";
 import mime from 'mime';
@@ -72,6 +73,14 @@ export default class OpenAIPlugin extends Plugin {
           `${this.settings.audioPath}/${fileName}`,
           new Uint8Array(arrayBuffer)
         );
+
+        const editor = this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+
+        if (editor) {
+          const cursorPosition = editor.getCursor();
+          editor.replaceRange(`![](${this.settings.audioPath}/${fileName})`, cursorPosition);
+        }
+
         new Notice("Recording saved!");
         this.recording = false;
       },
