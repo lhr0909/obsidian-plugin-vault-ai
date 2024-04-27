@@ -1,9 +1,9 @@
 {
-    "id": "obsidian-openai",
-    "name": "Obsidian OpenAI Plugin",
+    "id": "vault-ai",
+    "name": "Obsidian Vault AI Plugin",
     "version": "0.0.1",
     "minAppVersion": "1.5.0",
-    "description": "Use OpenAI API in Obsidian, seamlessly",
+    "description": "Infuse AI into your Obsidian vault",
     "author": "Simon Liang",
     "authorUrl": "https://github.com/lhr0909",
     "fundingUrl": "https://github.com/lhr0909",
