@@ -11,6 +11,7 @@ import {
   Editor,
 } from "obsidian";
 import OpenAI, { toFile } from "openai";
+import { ChatCompletionCreateParamsBase } from "openai/resources/chat/completions";
 import mime from "mime";
 import { Root, Code } from "mdast";
 import { fromMarkdown } from "mdast-util-from-markdown";
@@ -85,28 +86,31 @@ export default class OpenAIPlugin extends Plugin {
           `${this.settings.audioPath}/${fileName}`,
           new Uint8Array(arrayBuffer),
         );
+        const audioFile = this.app.vault.getFileByPath(
+          `${this.settings.audioPath}/${fileName}`,
+        );
 
         const editor =
           this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
 
         if (editor) {
           const cursorPosition = editor.getCursor();
-          // TODO: support wiki links (personal preference for now)
           editor.replaceRange(
-            `![](${this.settings.audioPath}/${fileName})`,
+            // biome-ignore lint/style/noNonNullAssertion: <explanation>
+            this.app.fileManager.generateMarkdownLink(audioFile!, "", "original audio"),
             cursorPosition,
           );
         } else {
           new Notice("No active editor found, saving to a file");
           const noteFilename = fileName.replace(extension ?? "webm", "md");
-          await this.app.vault.create(
+          const noteFile = await this.app.vault.create(
             `${this.settings.audioPath}/${noteFilename}`,
-            // TODO: support wiki links (personal preference for now)
-            `![](${this.settings.audioPath}/${fileName})`,
+            // biome-ignore lint/style/noNonNullAssertion: <explanation>
+            this.app.fileManager.generateMarkdownLink(audioFile!, "", "original audio"),
           );
 
           await this.app.workspace.openLinkText(
-            `![](${this.settings.audioPath}/${noteFilename})`,
+            this.app.fileManager.generateMarkdownLink(noteFile, ""),
             "",
             true,
           );
@@ -218,6 +222,13 @@ export default class OpenAIPlugin extends Plugin {
             content = text.split("\n").slice(end).join("\n")
           }
 
+          let frontmatter = {} as Omit<ChatCompletionCreateParamsBase, 'messages'>;
+          await this.app.fileManager.processFrontMatter(activeFile, (frmt) => {
+            frontmatter = frmt;
+          });
+
+          console.log(frontmatter);
+
           // const content = await this.app.vault.read(activeFile);
           // const content = editor.getValue();
           const parts = content.split(`<hr class="vault-ai-sep">`);
@@ -258,32 +269,9 @@ export default class OpenAIPlugin extends Plugin {
           console.log(messages);
 
           const stream = await this.openai.chat.completions.create({
-            model: "gpt-4-turbo",
+            ...frontmatter,
+            model: frontmatter?.model ?? "gpt-4-turbo",
             messages,
-            tools: [
-              {
-                type: "function",
-                function: {
-                  name: "get_current_weather",
-                  description: "Get the current weather in a given location",
-                  parameters: {
-                    type: "object",
-                    properties: {
-                      location: {
-                        type: "string",
-                        description:
-                          "The city and state, e.g. San Francisco, CA",
-                      },
-                      unit: {
-                        type: "string",
-                        enum: ["celsius", "fahrenheit"],
-                      },
-                    },
-                    required: ["location"],
-                  },
-                },
-              },
-            ],
             stream: true,
           });
 
@@ -312,8 +300,8 @@ export default class OpenAIPlugin extends Plugin {
     );
 
     // This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-    const statusBarItemEl = this.addStatusBarItem();
-    statusBarItemEl.setText("Whisper Idle");
+    // const statusBarItemEl = this.addStatusBarItem();
+    // statusBarItemEl.setText("Whisper Idle");
 
     // This adds a simple command that can be triggered anywhere
     // this.addCommand({
