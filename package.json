@@ -13,6 +13,8 @@
     "license": "MIT",
     "devDependencies": {
         "@biomejs/biome": "^1.7.1",
+        "@types/lodash": "^4.17.0",
+        "@types/mdast": "^4.0.3",
         "@types/node": "^20",
         "builtin-modules": "^3.3.0",
         "esbuild": "^0.20.0",
@@ -26,7 +28,13 @@
     },
     "dependencies": {
         "axios": "^1.6.8",
+        "lodash": "^4.17.21",
+        "mdast-util-from-markdown": "^2.0.0",
+        "mdast-util-to-markdown": "^2.1.0",
+        "mdast-util-wiki-link": "^0.1.2",
+        "micromark-extension-wiki-link": "^0.0.4",
         "mime": "^4.0.3",
-        "openai": "^4.38.5"
+        "openai": "^4.38.5",
+        "yaml": "^2.4.2"
     }
 }

@@ -8,9 +8,19 @@ import {
   TFile,
   addIcon,
   MarkdownView,
+  Editor,
 } from "obsidian";
 import OpenAI, { toFile } from "openai";
 import mime from "mime";
+import { Root, Code } from "mdast";
+import { fromMarkdown } from "mdast-util-from-markdown";
+import { toMarkdown } from "mdast-util-to-markdown";
+import * as wikiLink from "mdast-util-wiki-link";
+// @ts-ignore
+import { syntax } from "micromark-extension-wiki-link";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { mergeWith, isString, cloneDeep } from "lodash";
+
 // import axios from 'axios';
 
 import { NativeAudioRecorder } from "./recorder";
@@ -30,6 +40,10 @@ const DEFAULT_SETTINGS: OpenAIPluginSettings = {
 addIcon(
   "captions",
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-captions"><rect width="18" height="14" x="3" y="5" rx="2" ry="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/></svg>`,
+);
+addIcon(
+  "bot-message-square",
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bot-message-square"><path d="M12 6V2H8"/><path d="m8 18-4 4V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2Z"/><path d="M2 12h2"/><path d="M9 11v2"/><path d="M15 11v2"/><path d="M20 12h2"/></svg>`,
 );
 
 export default class OpenAIPlugin extends Plugin {
@@ -186,6 +200,117 @@ export default class OpenAIPlugin extends Plugin {
     // Perform additional things with the ribbon
     ribbonIconEl.addClass("my-plugin-ribbon-class");
 
+    this.addRibbonIcon(
+      "bot-message-square",
+      "AI Chat",
+      async (evt: MouseEvent) => {
+        const activeFile = this.app.workspace.getActiveFile();
+        const editor =
+          this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+
+        if (editor && activeFile) {
+          const text = editor.getValue();
+          let content = text;
+          const position = this.app.metadataCache.getFileCache(activeFile)?.frontmatterPosition;
+          if (position) {
+            // account for end of frontmatter
+            const end = position.end.line + 1
+            content = text.split("\n").slice(end).join("\n")
+          }
+
+          // const content = await this.app.vault.read(activeFile);
+          // const content = editor.getValue();
+          const parts = content.split(`<hr class="vault-ai-sep">`);
+
+          const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
+            parts.map((part: string) => {
+              const tree = this.parseMarkdown(part);
+
+              if (
+                tree.children.length >= 1 &&
+                tree.children[0].type === "code"
+              ) {
+                const codeBlock = tree.children[0] as Code;
+
+                let metadata = {};
+                if (codeBlock.lang === "yaml") {
+                  metadata = parseYaml(codeBlock.value);
+                }
+
+                // remove the yaml block
+                tree.children.splice(0, 1);
+
+                const content = this.stringifyMarkdown(tree);
+
+                return {
+                  ...metadata,
+                  content,
+                } as OpenAI.Chat.Completions.ChatCompletionMessageParam;
+              }
+
+              const content = this.stringifyMarkdown(tree);
+              return {
+                role: "user",
+                content,
+              };
+            });
+
+          console.log(messages);
+
+          const stream = await this.openai.chat.completions.create({
+            model: "gpt-4-turbo",
+            messages,
+            tools: [
+              {
+                type: "function",
+                function: {
+                  name: "get_current_weather",
+                  description: "Get the current weather in a given location",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      location: {
+                        type: "string",
+                        description:
+                          "The city and state, e.g. San Francisco, CA",
+                      },
+                      unit: {
+                        type: "string",
+                        enum: ["celsius", "fahrenheit"],
+                      },
+                    },
+                    required: ["location"],
+                  },
+                },
+              },
+            ],
+            stream: true,
+          });
+
+          // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+          const response: any = {};
+          for await (const chunk of stream) {
+            const choice = chunk.choices[0];
+            // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+            mergeWith(response, choice.delta, (objValue: any, srcValue: any) => {
+              if (isString(objValue) && isString(srcValue)) {
+                return objValue + srcValue;
+              }
+            });
+
+            await this.app.vault.process(activeFile, (data: string) => {
+              return `${text}\n\n<hr class="vault-ai-sep">\n\n${this.processResponse(cloneDeep(response))}`;
+            });
+          }
+
+          await this.app.vault.process(activeFile, (data: string) => {
+            const role = response.tool_calls ? "tool" : "user";
+            return `${data}\n\n<hr class="vault-ai-sep">\n\n\`\`\`yaml\n${stringifyYaml({ role })}\`\`\``;
+          });
+        }
+      },
+    );
+
     // This adds a status bar item to the bottom of the app. Does not work on mobile apps.
     const statusBarItemEl = this.addStatusBarItem();
     statusBarItemEl.setText("Whisper Idle");
@@ -199,14 +324,14 @@ export default class OpenAIPlugin extends Plugin {
     //   },
     // });
     // This adds an editor command that can perform some operation on the current editor instance
-    // this.addCommand({
-    //   id: "transcribe-current",
-    //   name: "Transcribe Contents in Current File",
-    //   editorCallback: (editor: Editor, view: MarkdownView) => {
-    //     console.log(editor.getSelection());
-    //     editor.replaceSelection("Sample Editor Command");
-    //   },
-    // });
+    this.addCommand({
+      id: "add-sep",
+      name: "Add Separator",
+      editorCallback: (editor: Editor, view: MarkdownView) => {
+        console.log(editor.getSelection());
+        editor.replaceSelection(`\n<hr class="vault-ai-sep">\n`);
+      },
+    });
     // This adds a complex command that can check whether the current state of the app allows execution of the command
     // this.addCommand({
     //   id: "open-sample-modal-complex",
@@ -241,6 +366,40 @@ export default class OpenAIPlugin extends Plugin {
     // this.registerInterval(
     //   window.setInterval(() => console.log("setInterval"), 5 * 60 * 1000),
     // );
+  }
+
+  private processResponse(delta: OpenAI.Chat.Completions.ChatCompletionChunk.Choice.Delta) {
+    const { content, ...rest } = delta;
+
+    const metadataYaml = stringifyYaml(rest);
+
+    return `\`\`\`yaml\n${metadataYaml}\`\`\`\n\n${content ?? ""}`;
+  }
+
+  private stringifyMarkdown(tree: Root) {
+    const content = toMarkdown(tree, {
+      extensions: [
+        wikiLink.toMarkdown({
+          aliasDivider: "|",
+          // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+        }) as any,
+      ],
+    });
+
+    return content;
+  }
+
+  private parseMarkdown(content: string) {
+    const tree = fromMarkdown(content, {
+      extensions: [
+        syntax({
+          aliasDivider: "|",
+        }),
+      ],
+      mdastExtensions: [wikiLink.fromMarkdown()],
+    });
+
+    return tree;
   }
 
   onunload() {}
