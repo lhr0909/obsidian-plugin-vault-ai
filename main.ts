@@ -267,6 +267,7 @@ export default class OpenAIPlugin extends Plugin {
             });
 
           console.log(messages);
+          new Notice("AI Generating Response...");
 
           const stream = await this.openai.chat.completions.create({
             ...frontmatter,
@@ -295,6 +296,8 @@ export default class OpenAIPlugin extends Plugin {
             const role = response.tool_calls ? "tool" : "user";
             return `${data}\n\n<hr class="vault-ai-sep">\n\n\`\`\`yaml\n${stringifyYaml({ role })}\`\`\``;
           });
+
+          new Notice("AI Response Finished!");
         }
       },
     );
