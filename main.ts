@@ -269,12 +269,16 @@ export default class OpenAIPlugin extends Plugin {
           console.log(messages);
           new Notice("AI Generating Response...");
 
-          const stream = await this.openai.chat.completions.create({
+          const params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
             ...frontmatter,
             model: frontmatter?.model ?? "gpt-4-turbo",
             messages,
             stream: true,
-          });
+          };
+
+          console.log(params);
+
+          const stream = await this.openai.chat.completions.create(params);
 
           // biome-ignore lint/suspicious/noExplicitAny: <explanation>
           const response: any = {};
