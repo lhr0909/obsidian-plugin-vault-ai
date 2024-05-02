@@ -20,7 +20,7 @@ import * as wikiLink from "mdast-util-wiki-link";
 // @ts-ignore
 import { syntax } from "micromark-extension-wiki-link";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import { mergeWith, isString, cloneDeep } from "lodash";
+import { mergeWith, isString, isArray, cloneDeep } from "lodash";
 
 // import axios from 'axios';
 
@@ -186,7 +186,7 @@ export default class OpenAIPlugin extends Plugin {
                   // replace the linked file with the transcription
                   const replaced = data.replace(
                     regex,
-                    `${result?.[0]}\n\n${transcription.text}`,
+                    `${result?.[0]}\n\n###### Transcription:\n\n${transcription.text}`,
                   );
                   return replaced;
                 }
@@ -284,8 +284,18 @@ export default class OpenAIPlugin extends Plugin {
           const response: any = {};
           for await (const chunk of stream) {
             const choice = chunk.choices[0];
+            console.log(choice.delta);
             // biome-ignore lint/suspicious/noExplicitAny: <explanation>
-            mergeWith(response, choice.delta, (objValue: any, srcValue: any) => {
+            mergeWith(response, choice.delta, (objValue: any, srcValue: any, key: string, obj: any, src: any, stack: any) => {
+              console.log('objValue', objValue, 'srcValue', srcValue, 'key', key, 'obj', obj, 'src', src, 'stack', stack);
+              if (isArray(objValue) && isArray(srcValue)) {
+                // check the index field of the first element
+                if (objValue[0]?.index !== srcValue[0]?.index) {
+                  // reverse the order to hopefully get away with the mergeWith functionality
+                  return srcValue.concat(objValue);
+                }
+              }
+
               if (isString(objValue) && isString(srcValue)) {
                 return objValue + srcValue;
               }

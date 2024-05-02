@@ -1,9 +1,10 @@
-# OpenAI Plugin for Obsidian
+# Vault AI Plugin for Obsidian
 
-This is a plugin for Obsidian to use OpenAI features.
+Your Obsidian vault is your second brain. This plugin helps you to make it even smarter by adding AI capabilities to it.
 
-# Why another one?
+## Features
 
-I think the current plugins don't fit my needs. I want to be able to use more linking features in Obsidian when I use OpenAI. This way very powerful workflows can be set up (think manual RAG by supplying links).
-
-Also I really enjoy taking voice memos. Being able to transcribe voice memos and YouTube links is going to help me a lot in my daily routines.
+- **AI-powered voice memos**: Record your voice and transcribe it to text right afterwards.
+- **ChatGPT directly in Obsidian**: Use AI chat alongside / in your notes to empower your thinking.
+- **AI-powered notes lookup**: We index all your notes locally so you can search them by asking questions. Vault AI can also use the same feature to look up your notes.
+- **AI memories**: ask Vault AI to remember things for you.
