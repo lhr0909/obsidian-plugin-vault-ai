@@ -1,11 +1,11 @@
 {
-    "id": "vault-ai",
-    "name": "Obsidian Vault AI Plugin",
-    "version": "0.1.0",
-    "minAppVersion": "1.5.0",
-    "description": "Infuse AI into your Obsidian vault",
-    "author": "Simon Liang",
-    "authorUrl": "https://github.com/lhr0909",
-    "fundingUrl": "https://github.com/lhr0909",
-    "isDesktopOnly": false
+	"id": "vault-ai",
+	"name": "Obsidian Vault AI Plugin",
+	"minAppVersion": "1.5.0",
+	"description": "Infuse AI into your Obsidian vault",
+	"author": "Simon Liang",
+	"authorUrl": "https://github.com/lhr0909",
+	"fundingUrl": "https://github.com/lhr0909",
+	"isDesktopOnly": false,
+	"version": "0.1.1"
 }
