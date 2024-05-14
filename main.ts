@@ -271,7 +271,7 @@ export default class OpenAIPlugin extends Plugin {
 
           const params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
             ...frontmatter,
-            model: frontmatter?.model ?? "gpt-4-turbo",
+            model: frontmatter?.model ?? "gpt-4o",
             messages,
             stream: true,
           };
